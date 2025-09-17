@@ -8,9 +8,10 @@ from moviepy.editor import VideoClip, ImageClip, concatenate_videoclips
 WHEEL_SIZE = 800
 FONT_PATH = "/data/data/com.termux/files/usr/share/fonts/DejaVuSans.ttf"
 ARROW_SIZE = 40
-DURATION = 5
+SPIN_DURATION = 5   # seconds of spin animation
+STOP_HOLD = 2       # seconds to pause on stopped wheel
 FPS = 30
-WINNER_FONT_SIZE = 70
+WINNER_FONT_SIZE = 90
 
 # ---------------- LOAD USERNAMES ----------------
 with open("usernames.txt", "r") as f:
@@ -32,15 +33,17 @@ def create_wheel(usernames):
         start_angle = i * angle_per_slice
         end_angle = (i + 1) * angle_per_slice
         color = (100 + (i*40) % 155, 100 + (i*80) % 155, 200, 255)
-        draw.pieslice([10, 10, WHEEL_SIZE-10, WHEEL_SIZE-10], start=start_angle, end=end_angle, fill=color, outline="white")
+        draw.pieslice([10, 10, WHEEL_SIZE-10, WHEEL_SIZE-10],
+                      start=start_angle, end=end_angle,
+                      fill=color, outline="white")
 
-        # Add separating lines
+        # Separator line
         rad = math.radians(start_angle)
         x = center + radius * math.cos(rad)
         y = center + radius * math.sin(rad)
         draw.line((center, center, x, y), fill="white", width=3)
 
-        # Place username
+        # Username text
         text_angle = start_angle + angle_per_slice / 2
         rad = math.radians(text_angle)
         tx = center + (radius/1.5) * math.cos(rad)
@@ -77,21 +80,25 @@ arrow_img = draw_arrow()
 
 # ---------------- SPIN ANIMATION ----------------
 wheel_np = np.array(wheel_img)
-arrow_np = np.array(arrow_img)
 
-def make_frame(t):
-    progress = min(1, t / DURATION)
-    eased = 1 - (1-progress)**3
-    rotation = 1080*(1-progress) + target_angle
-    rotated = Image.fromarray(wheel_np).rotate(rotation, resample=Image.BICUBIC, center=(WHEEL_SIZE//2, WHEEL_SIZE//2), expand=False)
+def make_spin_frame(t):
+    progress = min(1, t / SPIN_DURATION)
+    eased = 1 - (1-progress)**3  # ease-out
+    rotation = 1440*(1-progress) + target_angle  # 4 spins then stop
+    rotated = Image.fromarray(wheel_np).rotate(rotation, resample=Image.BICUBIC,
+                                               center=(WHEEL_SIZE//2, WHEEL_SIZE//2), expand=False)
     frame = Image.new("RGB", (WHEEL_SIZE, WHEEL_SIZE), "black")
     frame.paste(rotated, (0,0), rotated)
     frame.paste(arrow_img, (0,0), arrow_img)
     return np.array(frame)
 
-spin_clip = VideoClip(make_frame, duration=DURATION)
+spin_clip = VideoClip(make_spin_frame, duration=SPIN_DURATION)
 
-# ---------------- WINNER REVEAL (NO IMAGEMAGICK) ----------------
+# ---------------- STOPPED WHEEL ----------------
+stopped_frame = make_spin_frame(SPIN_DURATION)
+stopped_clip = ImageClip(stopped_frame).set_duration(STOP_HOLD)
+
+# ---------------- WINNER REVEAL ----------------
 def make_winner_frame(t):
     img = Image.new("RGB", (WHEEL_SIZE, WHEEL_SIZE), "black")
     draw = ImageDraw.Draw(img)
@@ -101,11 +108,12 @@ def make_winner_frame(t):
         font = ImageFont.load_default()
     text = f"{winner} WINS!"
     tw, th = draw.textsize(text, font=font)
-    draw.text(((WHEEL_SIZE-tw)//2, (WHEEL_SIZE-th)//2), text, font=font, fill="yellow")
+    draw.text(((WHEEL_SIZE-tw)//2, (WHEEL_SIZE-th)//2),
+              text, font=font, fill="yellow")
     return np.array(img)
 
 winner_clip = VideoClip(make_winner_frame, duration=3)
 
 # ---------------- EXPORT VIDEO ----------------
-final = concatenate_videoclips([spin_clip, winner_clip])
+final = concatenate_videoclips([spin_clip, stopped_clip, winner_clip])
 final.write_videofile("spin_fight_reel.mp4", fps=FPS, codec="libx264")
