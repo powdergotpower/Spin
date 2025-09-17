@@ -7,8 +7,8 @@ from moviepy.editor import ImageSequenceClip, TextClip, CompositeVideoClip
 # ===== Settings =====
 WIDTH, HEIGHT = 720, 720
 FPS = 30
-DURATION = 5  # spin duration in seconds
-FINAL_HOLD = 3  # seconds showing winner
+DURATION = 5   # spin duration in seconds
+FINAL_HOLD = 3 # seconds showing winner
 ARROW_SIZE = 40
 WINNER_FONT_SIZE = 90
 
@@ -68,14 +68,19 @@ for i in range(total_frames):
     progress = i / total_frames
     rotation = (1 - (progress ** 2)) * 720 + final_angle  # ease out
     rotated = wheel_img.rotate(rotation, resample=Image.BICUBIC)
-    frames.append(np.array(rotated))  # convert PIL → numpy
+    frames.append(np.array(rotated))  # PIL → numpy
 
 # ===== Build spin clip =====
 clip = ImageSequenceClip(frames, fps=FPS)
 
-# ===== Winner text =====
-winner_text = TextClip(f"{winner} WINS!", fontsize=WINNER_FONT_SIZE,
-                       color="yellow", size=(WIDTH, HEIGHT)).set_duration(FINAL_HOLD)
+# ===== Winner text (PIL instead of ImageMagick) =====
+winner_text = TextClip(
+    f"{winner} WINS!",
+    fontsize=WINNER_FONT_SIZE,
+    color="yellow",
+    size=(WIDTH, HEIGHT),
+    method="caption"   # <- avoids ImageMagick
+).set_duration(FINAL_HOLD)
 
 final_video = CompositeVideoClip([clip, winner_text.set_start(DURATION)])
 
