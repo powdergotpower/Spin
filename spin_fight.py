@@ -1,12 +1,13 @@
 import random
 import math
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import ImageSequenceClip, TextClip, CompositeVideoClip
 
 # ===== Settings =====
 WIDTH, HEIGHT = 720, 720
 FPS = 30
-DURATION = 5  # seconds for spin
+DURATION = 5  # spin duration in seconds
 FINAL_HOLD = 3  # seconds showing winner
 ARROW_SIZE = 40
 WINNER_FONT_SIZE = 90
@@ -27,7 +28,6 @@ def make_wheel(names):
     img = Image.new("RGB", (WIDTH, HEIGHT), "black")
     draw = ImageDraw.Draw(img)
 
-    # Draw slices
     for i, name in enumerate(names):
         start_angle = i * angle_per_slice
         end_angle = start_angle + angle_per_slice
@@ -43,10 +43,10 @@ def make_wheel(names):
 
     return img
 
-# ===== Add arrow on top =====
+# ===== Add arrow =====
 def add_arrow(img):
     draw = ImageDraw.Draw(img)
-    cx, cy = WIDTH // 2, HEIGHT // 2
+    cx = WIDTH // 2
     arrow = [(cx - ARROW_SIZE, 10), (cx + ARROW_SIZE, 10), (cx, ARROW_SIZE * 2)]
     draw.polygon(arrow, fill="red")
     return img
@@ -61,18 +61,17 @@ winner = random.choice(usernames)
 winner_index = usernames.index(winner)
 angle_per_slice = 360 / len(usernames)
 
-# Final angle so that winner is at the arrow (top = 90°)
+# Final angle: winner under arrow at 90°
 final_angle = 90 - (winner_index * angle_per_slice + angle_per_slice / 2)
 
 for i in range(total_frames):
-    # Ease-out rotation: fast → slow → stop
     progress = i / total_frames
-    rotation = (1 - (progress ** 2)) * 720 + final_angle  # 2 spins + stop
+    rotation = (1 - (progress ** 2)) * 720 + final_angle  # ease out
     rotated = wheel_img.rotate(rotation, resample=Image.BICUBIC)
-    frames.append(rotated)
+    frames.append(np.array(rotated))  # convert PIL → numpy
 
 # ===== Build spin clip =====
-clip = ImageSequenceClip([frame for frame in frames], fps=FPS)
+clip = ImageSequenceClip(frames, fps=FPS)
 
 # ===== Winner text =====
 winner_text = TextClip(f"{winner} WINS!", fontsize=WINNER_FONT_SIZE,
