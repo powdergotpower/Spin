@@ -9,9 +9,7 @@ import os
 WHEEL_SIZE = 800  # pixels
 SPIN_DURATION = 5  # seconds
 FPS = 30
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Termux font path
-
-# Load usernames
+FONT_PATH = "/data/data/com.termux/files/usr/share/fonts/DejaVuSans.ttf" # Load usernames
 with open("usernames.txt", "r") as f:
     usernames = [line.strip() for line in f.readlines() if line.strip()]
 
