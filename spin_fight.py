@@ -1,84 +1,86 @@
-from moviepy.editor import *
+import random
+import math
 from PIL import Image, ImageDraw, ImageFont
-import math, random, os
+from moviepy.editor import ImageSequenceClip, TextClip, CompositeVideoClip
 
-# --- CONFIG ---
+# ===== Settings =====
 WIDTH, HEIGHT = 720, 720
-WHEEL_RADIUS = 300
-FONT_PATH = "/data/data/com.termux/files/usr/share/fonts/DejaVuSans.ttf"
-WINNER_FONT_SIZE = 90
 FPS = 30
+DURATION = 5  # seconds for spin
+FINAL_HOLD = 3  # seconds showing winner
+ARROW_SIZE = 40
+WINNER_FONT_SIZE = 90
 
-# Load usernames
+# ===== Load usernames =====
 with open("usernames.txt", "r") as f:
-    usernames = [u.strip() for u in f.readlines() if u.strip()]
+    usernames = [line.strip() for line in f if line.strip()]
 
-n = len(usernames)
-angle_per_user = 360 / n
+if not usernames:
+    raise ValueError("No usernames found in usernames.txt")
 
-# --- Draw Wheel ---
-def make_wheel(usernames):
-    img = Image.new("RGBA", (WIDTH, HEIGHT), (0,0,0,255))
+# ===== Create wheel image =====
+def make_wheel(names):
+    n = len(names)
+    angle_per_slice = 360 / n
+    radius = WIDTH // 2
+
+    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
     draw = ImageDraw.Draw(img)
-    cx, cy = WIDTH//2, HEIGHT//2
-    font = ImageFont.truetype(FONT_PATH, 26)
 
-    for i, user in enumerate(usernames):
-        start_angle = i * angle_per_user
-        end_angle = start_angle + angle_per_user
-        draw.pieslice([cx-WHEEL_RADIUS, cy-WHEEL_RADIUS, cx+WHEEL_RADIUS, cy+WHEEL_RADIUS],
-                      start=start_angle, end=end_angle,
-                      fill=(50+ i*20 % 200, 100+ i*40 % 155, 150, 255),
-                      outline="white")
+    # Draw slices
+    for i, name in enumerate(names):
+        start_angle = i * angle_per_slice
+        end_angle = start_angle + angle_per_slice
+        color = (100 + (i * 40) % 155, 50 + (i * 80) % 205, 150 + (i * 120) % 105)
+        draw.pieslice([0, 0, WIDTH, HEIGHT], start=start_angle, end=end_angle, fill=color)
 
-        # Position text on edge
-        text_angle = math.radians(start_angle + angle_per_user/2)
-        tx = cx + math.cos(text_angle) * (WHEEL_RADIUS - 50)
-        ty = cy + math.sin(text_angle) * (WHEEL_RADIUS - 50)
-        draw.text((tx-20, ty-10), user, font=font, fill="white")
+        # Place text
+        angle_rad = math.radians(start_angle + angle_per_slice / 2)
+        x = WIDTH / 2 + (radius / 1.5) * math.cos(angle_rad)
+        y = HEIGHT / 2 + (radius / 1.5) * math.sin(angle_rad)
+        font = ImageFont.load_default()
+        draw.text((x, y), name, fill="white", anchor="mm", font=font)
 
     return img
 
+# ===== Add arrow on top =====
+def add_arrow(img):
+    draw = ImageDraw.Draw(img)
+    cx, cy = WIDTH // 2, HEIGHT // 2
+    arrow = [(cx - ARROW_SIZE, 10), (cx + ARROW_SIZE, 10), (cx, ARROW_SIZE * 2)]
+    draw.polygon(arrow, fill="red")
+    return img
+
+# ===== Spin animation =====
 wheel_img = make_wheel(usernames)
-wheel_img_path = "wheel.png"
-wheel_img.save(wheel_img_path)
+wheel_img = add_arrow(wheel_img)
 
-# --- MoviePy Animation ---
-wheel_clip = ImageClip(wheel_img_path).set_duration(6).set_position("center")
-
-# Rotation easing (fast → slow → stop)
+frames = []
+total_frames = DURATION * FPS
 winner = random.choice(usernames)
 winner_index = usernames.index(winner)
-stop_angle = -(winner_index * angle_per_user + angle_per_user/2)
+angle_per_slice = 360 / len(usernames)
 
-def rotation(t):
-    total_spin = 1440  # 4 full spins
-    progress = t / 6
-    eased = 1 - (1-progress)**3  # cubic ease out
-    return total_spin * (1-eased) + stop_angle*eased
+# Final angle so that winner is at the arrow (top = 90°)
+final_angle = 90 - (winner_index * angle_per_slice + angle_per_slice / 2)
 
-rotated = wheel_clip.fl_time(lambda t: t).rotate(lambda t: rotation(t), resample="bilinear")
+for i in range(total_frames):
+    # Ease-out rotation: fast → slow → stop
+    progress = i / total_frames
+    rotation = (1 - (progress ** 2)) * 720 + final_angle  # 2 spins + stop
+    rotated = wheel_img.rotate(rotation, resample=Image.BICUBIC)
+    frames.append(rotated)
 
-# Arrow on top
-arrow = (ImageClip(wheel_img_path)
-         .set_make_frame(lambda t: Image.new("RGBA",(WIDTH,HEIGHT),(0,0,0,0)).tobytes())
-         .set_duration(6))
-arrow_draw = Image.new("RGBA", (WIDTH, HEIGHT), (0,0,0,0))
-d = ImageDraw.Draw(arrow_draw)
-cx, cy = WIDTH//2, HEIGHT//2
-d.polygon([(cx, cy-WHEEL_RADIUS-40), (cx-20, cy-WHEEL_RADIUS), (cx+20, cy-WHEEL_RADIUS)], fill="red")
-arrow_path = "arrow.png"
-arrow_draw.save(arrow_path)
-arrow_clip = ImageClip(arrow_path).set_duration(6)
+# ===== Build spin clip =====
+clip = ImageSequenceClip([frame for frame in frames], fps=FPS)
 
-# Winner text after spin
-winner_text = (TextClip(f"{winner} WINS!", fontsize=WINNER_FONT_SIZE, color="yellow", font="DejaVu-Sans")
-               .set_duration(3)
-               .set_start(6)
-               .set_position("center"))
+# ===== Winner text =====
+winner_text = TextClip(f"{winner} WINS!", fontsize=WINNER_FONT_SIZE,
+                       color="yellow", size=(WIDTH, HEIGHT)).set_duration(FINAL_HOLD)
 
-# Final video
-final = CompositeVideoClip([rotated, arrow_clip, winner_text], size=(WIDTH,HEIGHT))
-final.write_videofile("spin_fight_reel.mp4", fps=FPS)
+final_video = CompositeVideoClip([clip, winner_text.set_start(DURATION)])
 
-print("Winner is:", winner)
+# ===== Export =====
+final_video.write_videofile("spin_fight_reel.mp4", fps=FPS)
+
+print(f"Winner is: {winner}")
