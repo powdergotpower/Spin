@@ -2,7 +2,7 @@ import random
 import math
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from moviepy.editor import ImageSequenceClip, TextClip, CompositeVideoClip
+from moviepy.editor import ImageSequenceClip, ImageClip, CompositeVideoClip
 
 # ===== Settings =====
 WIDTH, HEIGHT = 720, 720
@@ -73,16 +73,20 @@ for i in range(total_frames):
 # ===== Build spin clip =====
 clip = ImageSequenceClip(frames, fps=FPS)
 
-# ===== Winner text (PIL instead of ImageMagick) =====
-winner_text = TextClip(
-    f"{winner} WINS!",
-    fontsize=WINNER_FONT_SIZE,
-    color="yellow",
-    size=(WIDTH, HEIGHT),
-    method="caption"   # <- avoids ImageMagick
-).set_duration(FINAL_HOLD)
+# ===== Winner text with Pillow (NO IMAGEMAGICK) =====
+def make_text_image(text, fontsize=90, color="yellow"):
+    img = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default()  # use default font
+    bbox = draw.textbbox((0, 0), text, font=font)
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    draw.text(((WIDTH - w) / 2, (HEIGHT - h) / 2), text, font=font, fill=color)
+    return img
 
-final_video = CompositeVideoClip([clip, winner_text.set_start(DURATION)])
+winner_img = make_text_image(f"{winner} WINS!", fontsize=WINNER_FONT_SIZE)
+winner_clip = ImageClip(np.array(winner_img)).set_duration(FINAL_HOLD)
+
+final_video = CompositeVideoClip([clip, winner_clip.set_start(DURATION)])
 
 # ===== Export =====
 final_video.write_videofile("spin_fight_reel.mp4", fps=FPS)
