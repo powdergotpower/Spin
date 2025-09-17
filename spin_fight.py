@@ -1,52 +1,41 @@
 import random
 from moviepy.editor import *
-from moviepy.video.tools.drawing import color_gradient
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import numpy as np
-import os
 
 # ----- CONFIG -----
-WHEEL_SIZE = 800  # pixels
-SPIN_DURATION = 5  # seconds
-FPS = 30
-FONT_PATH = "/data/data/com.termux/files/usr/share/fonts/DejaVuSans.ttf" # Load usernames
+WHEEL_SIZE = 800       # Wheel image size in pixels
+SPIN_DURATION = 5      # Spin duration in seconds
+FPS = 30               # Frames per second
+OUTPUT_FILE = "spin_fight_reel.mp4"
+
+# ----- LOAD USERNAMES -----
 with open("usernames.txt", "r") as f:
     usernames = [line.strip() for line in f.readlines() if line.strip()]
 
 num_users = len(usernames)
+if num_users == 0:
+    raise ValueError("No usernames found in usernames.txt")
 
-# Create wheel image
-def create_wheel(usernames):
-    wheel = Image.new("RGBA", (WHEEL_SIZE, WHEEL_SIZE), (255, 255, 255, 0))
+# ----- CREATE BASIC WHEEL IMAGE (without text) -----
+def create_wheel(num_slices):
+    wheel = Image.new("RGB", (WHEEL_SIZE, WHEEL_SIZE), (255, 255, 255))
     draw = ImageDraw.Draw(wheel)
-    angle_per_slice = 360 / len(usernames)
-    
-    for i, name in enumerate(usernames):
+    angle_per_slice = 360 / num_slices
+    for i in range(num_slices):
         start_angle = i * angle_per_slice
         end_angle = start_angle + angle_per_slice
-        
-        # Alternate slice colors
         color = (255, 200, 0) if i % 2 == 0 else (255, 150, 0)
         draw.pieslice([0,0,WHEEL_SIZE,WHEEL_SIZE], start=start_angle, end=end_angle, fill=color)
-        
-        # Draw username
-        mid_angle = (start_angle + end_angle) / 2
-        text_x = WHEEL_SIZE/2 + 0.35*WHEEL_SIZE*np.cos(np.radians(mid_angle))
-        text_y = WHEEL_SIZE/2 + 0.35*WHEEL_SIZE*np.sin(np.radians(mid_angle))
-        
-        font = ImageFont.truetype(FONT_PATH, 28)
-        text_w, text_h = draw.textsize(name, font=font)
-        draw.text((text_x-text_w/2, text_y-text_h/2), name, fill="black", font=font)
-        
     return wheel
 
-wheel_img = create_wheel(usernames)
-wheel_img.save("wheel.png")
+wheel_img = create_wheel(num_users)
+wheel_img.save("wheel.png")  # Optional: see the wheel image
 
-# Convert PIL image to MoviePy clip
+# ----- CONVERT WHEEL TO MOVIEPY CLIP -----
 wheel_clip = ImageClip(np.array(wheel_img)).set_duration(SPIN_DURATION).resize(width=500)
 
-# Animation: Spin with easing out
+# ----- SPIN ANIMATION -----
 def spin(get_frame, t):
     progress = t / SPIN_DURATION
     angle = 720*progress*(1-progress) + random.randint(0,360)  # spins + random offset
@@ -56,16 +45,16 @@ def spin(get_frame, t):
 
 spinning = wheel_clip.fl(spin, apply_to=['mask'])
 
-# Pick random winner
+# ----- PICK RANDOM WINNER -----
 winner = random.choice(usernames)
 print("Winner is:", winner)
 
-# Create winner text clip
-txt_clip = TextClip(f"{winner} WINS!", fontsize=70, color='yellow', font='DejaVu-Sans-Bold')\
-           .set_duration(3).set_position('center')
+# ----- CREATE WINNER TEXT CLIP -----
+winner_clip = TextClip(f"{winner} WINS!", fontsize=70, color='yellow', font='DejaVu-Sans-Bold')\
+               .set_duration(3).set_position('center')
 
-# Combine spin + winner reveal
-final = concatenate_videoclips([spinning, txt_clip])
+# ----- COMBINE SPIN + WINNER -----
+final = concatenate_videoclips([spinning, winner_clip])
 
-# Export
-final.write_videofile("spin_fight_reel.mp4", fps=FPS)
+# ----- EXPORT VIDEO -----
+final.write_videofile(OUTPUT_FILE, fps=FPS)
