@@ -6,7 +6,7 @@
 import os, math, random
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from moviepy.editor import ImageSequenceClip, ImageClip, CompositeVideoClip, vfx
+from moviepy.editor import ImageSequenceClip, ImageClip, CompositeVideoClip
 
 # ---------------- CONFIG ----------------
 WIDTH, HEIGHT = 1080, 1080
@@ -19,7 +19,6 @@ SPINS = 6
 OUTPUT_NAME = "spin_result.mp4"
 # ---------------------------------------
 
-# ---------------- helpers ----------------
 def find_font():
     candidates = [
         "/data/data/com.termux/files/usr/share/fonts/DejaVuSans.ttf",
@@ -45,12 +44,7 @@ if not usernames:
 
 n = len(usernames)
 angle_per = 360.0 / n
-
 FONT_PATH = find_font()
-if FONT_PATH:
-    print("Using font:", FONT_PATH)
-else:
-    print("Warning: no TTF font found, using default font.")
 
 # ---------------- build wheel ----------------
 def build_wheel(names):
@@ -66,7 +60,6 @@ def build_wheel(names):
         color = ((70 + (i*45)) % 256, (110 + (i*85)) % 256, (160 + (i*55)) % 256)
         draw.pieslice([cx-RADIUS, cy-RADIUS, cx+RADIUS, cy+RADIUS], start=start, end=end, fill=color)
 
-        # separator
         ang_rad = math.radians(start - 90)
         x = cx + RADIUS * math.cos(ang_rad)
         y = cy + RADIUS * math.sin(ang_rad)
@@ -91,12 +84,17 @@ def build_wheel(names):
             font = ImageFont.truetype(FONT_PATH, font_size)
             tw, th = draw.textsize(name, font=font)
 
-        # place text
+        # Draw each text horizontally (not curved) at correct angle
         mid_angle = start + slice_angle / 2
-        rad = math.radians(mid_angle - 90)
+        text_rad = math.radians(mid_angle - 90)
         text_r = RADIUS + 60
-        tx, ty = cx + text_r * math.cos(rad), cy + text_r * math.sin(rad)
-        draw.text((tx - tw/2, ty - th/2), name, font=font, fill=(255,255,255))
+        tx, ty = cx + text_r * math.cos(text_rad), cy + text_r * math.sin(text_rad)
+        # Build a text image, rotate it, paste over wheel
+        txt_img = Image.new("RGBA", (tw+10, th+10), (0,0,0,0))
+        txt_draw = ImageDraw.Draw(txt_img)
+        txt_draw.text(((txt_img.width-tw)//2, (txt_img.height-th)//2), name, font=font, fill=(255,255,255))
+        rotated_txt = txt_img.rotate(mid_angle, resample=Image.BICUBIC, expand=1)
+        img.paste(rotated_txt, (int(tx - rotated_txt.width//2), int(ty - rotated_txt.height//2)), rotated_txt)
 
     return img
 
@@ -145,15 +143,25 @@ spin_and_arrow = CompositeVideoClip([spin_clip, arrow_clip], size=(WIDTH, HEIGHT
 def make_winner_image(text):
     img = Image.new("RGB", (WIDTH, HEIGHT), (0,0,0))
     draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype(FONT_PATH, int(WIDTH*0.12))
-    except:
-        font = ImageFont.load_default()
-    tw, th = draw.textsize(text, font=font)
+    max_width = WIDTH * 0.8
+    max_font_size = int(WIDTH * 0.12)
+    min_font_size = 24
+    font_size = max_font_size
+
+    while font_size > min_font_size:
+        try:
+            font = ImageFont.truetype(FONT_PATH, font_size)
+        except:
+            font = ImageFont.load_default()
+        tw, th = draw.textsize(text, font=font)
+        if tw <= max_width:
+            break
+        font_size -= 6
+
     x, y = (WIDTH-tw)//2, (HEIGHT-th)//2
     for dx, dy in [(-4,0),(4,0),(0,-4),(0,4)]:
-        draw.text((x+dx,y+dy), text, font=font, fill=(0,0,0))
-    draw.text((x,y), text, font=font, fill=(255,215,0))
+        draw.text((x+dx, y+dy), text, font=font, fill=(0,0,0))
+    draw.text((x, y), text, font=font, fill=(255,215,0))
     return img
 
 winner_img = make_winner_image(f"{winner} WINS!")
