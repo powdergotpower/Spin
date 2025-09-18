@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# spin_fight_hd.py — Termux HD spin wheel, max quality
+# spin_fight_portrait.py — Termux vertical HD spin wheel, max quality
 # Requires: pillow, moviepy, numpy
 # Install: pip install pillow moviepy numpy
 
@@ -9,14 +9,14 @@ from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import ImageSequenceClip, ImageClip, CompositeVideoClip
 
 # ---------------- CONFIG ----------------
-WIDTH, HEIGHT = 1920, 1080   # HD widescreen
+WIDTH, HEIGHT = 1080, 1920       # Portrait HD
 RADIUS = 500
-FPS = 60                     # Smooth 60 FPS
+FPS = 60                         # Smooth 60 FPS
 SPIN_DURATION = 6.0
 HOLD_DURATION = 2.0
 WINNER_DURATION = 4.0
 SPINS = 6
-OUTPUT_NAME = "spin_result_hd.mp4"
+OUTPUT_NAME = "spin_result_portrait.mp4"
 # ---------------------------------------
 
 def find_font():
@@ -45,10 +45,11 @@ if not usernames:
 n = len(usernames)
 angle_per = 360.0 / n
 FONT_PATH = find_font()
+WHEEL_CENTER = (WIDTH//2, HEIGHT//2 - 150)  # move wheel slightly up
 
 # ---------------- build wheel ----------------
 def build_wheel(names):
-    cx, cy = WIDTH//2, HEIGHT//2
+    cx, cy = WHEEL_CENTER
     img = Image.new("RGBA", (WIDTH, HEIGHT), (0,0,0,255))
     draw = ImageDraw.Draw(img)
 
@@ -94,7 +95,7 @@ def build_wheel(names):
     return img
 
 wheel_base = build_wheel(usernames)
-wheel_base.save("wheel_preview_hd.png")
+wheel_base.save("wheel_preview_portrait.png")
 
 # ---------------- arrow ----------------
 def build_arrow():
@@ -123,7 +124,7 @@ for i in range(spin_frames):
     p = i / (spin_frames-1) if spin_frames > 1 else 1.0
     eased = ease_out_cubic(p)
     angle = eased * total_rotation
-    rotated = wheel_base.rotate(angle, resample=Image.BICUBIC, center=(WIDTH//2, HEIGHT//2))
+    rotated = wheel_base.rotate(angle, resample=Image.BICUBIC, center=WHEEL_CENTER)
     frames.append(np.array(rotated.convert("RGB")))
 
 final_frame = frames[-1].copy()
@@ -131,7 +132,10 @@ for _ in range(hold_frames):
     frames.append(final_frame)
 
 spin_clip = ImageSequenceClip(frames, fps=FPS)
-arrow_clip = ImageClip(np.array(arrow_img)).set_duration(SPIN_DURATION+HOLD_DURATION).set_position(("center", 20))
+arrow_clip = ImageClip(np.array(arrow_img))\
+    .set_duration(SPIN_DURATION+HOLD_DURATION)\
+    .set_position(("center", 50))  # top arrow
+
 spin_and_arrow = CompositeVideoClip([spin_clip, arrow_clip], size=(WIDTH, HEIGHT)).set_duration(SPIN_DURATION+HOLD_DURATION)
 
 # ---------------- winner screen ----------------
@@ -153,18 +157,20 @@ def make_winner_image(text):
             break
         font_size -= 6
 
-    x, y = (WIDTH-tw)//2, (HEIGHT-th)//2
+    x, y = (WIDTH-tw)//2, HEIGHT//2 + 500  # place below wheel
     for dx, dy in [(-4,0),(4,0),(0,-4),(0,4)]:
         draw.text((x+dx, y+dy), text, font=font, fill=(0,0,0))
     draw.text((x, y), text, font=font, fill=(255,215,0))
     return img
 
 winner_img = make_winner_image(f"{winner} WINS!")
-winner_clip = ImageClip(np.array(winner_img)).set_duration(WINNER_DURATION).set_start(SPIN_DURATION+HOLD_DURATION)
+winner_clip = ImageClip(np.array(winner_img))\
+    .set_duration(WINNER_DURATION)\
+    .set_start(SPIN_DURATION+HOLD_DURATION)
 
 # ---------------- final video ----------------
 final = CompositeVideoClip([spin_and_arrow, winner_clip], size=(WIDTH, HEIGHT))
-print("Rendering HD video — please wait...")
+print("Rendering vertical HD video — please wait...")
 final.write_videofile(
     OUTPUT_NAME,
     fps=FPS,
