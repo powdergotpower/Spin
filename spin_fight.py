@@ -1,6 +1,5 @@
 import random
 import math
-import matplotlib.pyplot as plt
 import numpy as np
 from moviepy.editor import ImageSequenceClip, TextClip, CompositeVideoClip
 from PIL import ImageFont
