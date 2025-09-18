@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# spin_fight.py — Termux spin wheel, clean & accurate winner
+# spin_fight_hd.py — Termux HD spin wheel, max quality
 # Requires: pillow, moviepy, numpy
 # Install: pip install pillow moviepy numpy
 
@@ -9,14 +9,14 @@ from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import ImageSequenceClip, ImageClip, CompositeVideoClip
 
 # ---------------- CONFIG ----------------
-WIDTH, HEIGHT = 1080, 1080
-RADIUS = 420
-FPS = 30
+WIDTH, HEIGHT = 1920, 1080   # HD widescreen
+RADIUS = 500
+FPS = 60                     # Smooth 60 FPS
 SPIN_DURATION = 6.0
 HOLD_DURATION = 2.0
 WINNER_DURATION = 4.0
 SPINS = 6
-OUTPUT_NAME = "spin_result.mp4"
+OUTPUT_NAME = "spin_result_hd.mp4"
 # ---------------------------------------
 
 def find_font():
@@ -56,18 +56,16 @@ def build_wheel(names):
 
     for i, name in enumerate(names):
         start = i * angle_per
-        end = start + angle_per
         color = ((70 + (i*45)) % 256, (110 + (i*85)) % 256, (160 + (i*55)) % 256)
-        draw.pieslice([cx-RADIUS, cy-RADIUS, cx+RADIUS, cy+RADIUS], start=start, end=end, fill=color)
+        draw.pieslice([cx-RADIUS, cy-RADIUS, cx+RADIUS, cy+RADIUS], start=start, end=start+angle_per, fill=color)
 
         ang_rad = math.radians(start - 90)
         x = cx + RADIUS * math.cos(ang_rad)
         y = cy + RADIUS * math.sin(ang_rad)
         draw.line([(cx, cy), (x, y)], fill=(240,240,240), width=3)
 
-        # dynamic font size
         slice_angle = angle_per
-        max_font, min_font = 40, 8
+        max_font, min_font = 60, 12
         base_size = int(max_font * (slice_angle / 30))
         font_size = max(min_font, min(max_font, base_size))
 
@@ -76,7 +74,6 @@ def build_wheel(names):
         except:
             font = ImageFont.load_default()
 
-        # shrink if too wide
         tw, th = draw.textsize(name, font=font)
         max_width = 2 * math.pi * RADIUS * (slice_angle / 360)
         while tw > max_width and font_size > min_font:
@@ -84,12 +81,10 @@ def build_wheel(names):
             font = ImageFont.truetype(FONT_PATH, font_size)
             tw, th = draw.textsize(name, font=font)
 
-        # Draw each text horizontally (not curved) at correct angle
         mid_angle = start + slice_angle / 2
         text_rad = math.radians(mid_angle - 90)
-        text_r = RADIUS + 60
+        text_r = RADIUS + 80
         tx, ty = cx + text_r * math.cos(text_rad), cy + text_r * math.sin(text_rad)
-        # Build a text image, rotate it, paste over wheel
         txt_img = Image.new("RGBA", (tw+10, th+10), (0,0,0,0))
         txt_draw = ImageDraw.Draw(txt_img)
         txt_draw.text(((txt_img.width-tw)//2, (txt_img.height-th)//2), name, font=font, fill=(255,255,255))
@@ -99,14 +94,14 @@ def build_wheel(names):
     return img
 
 wheel_base = build_wheel(usernames)
-wheel_base.save("wheel_preview.png")
+wheel_base.save("wheel_preview_hd.png")
 
 # ---------------- arrow ----------------
 def build_arrow():
-    w, h = 240, 140
+    w, h = 320, 180
     img = Image.new("RGBA", (w, h), (0,0,0,0))
     draw = ImageDraw.Draw(img)
-    draw.polygon([(w//2, 10), (w//2 - 50, 100), (w//2 + 50, 100)], fill=(220,40,40,255))
+    draw.polygon([(w//2, 10), (w//2 - 70, 120), (w//2 + 70, 120)], fill=(220,40,40,255))
     return img
 
 arrow_img = build_arrow()
@@ -169,8 +164,15 @@ winner_clip = ImageClip(np.array(winner_img)).set_duration(WINNER_DURATION).set_
 
 # ---------------- final video ----------------
 final = CompositeVideoClip([spin_and_arrow, winner_clip], size=(WIDTH, HEIGHT))
-print("Rendering video — please wait...")
-final.write_videofile(OUTPUT_NAME, fps=FPS, codec="libx264", audio=False, preset="medium")
+print("Rendering HD video — please wait...")
+final.write_videofile(
+    OUTPUT_NAME,
+    fps=FPS,
+    codec="libx264",
+    audio=False,
+    preset="slow",
+    ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"]
+)
 
 print("Video saved in Termux folder:", os.path.abspath(OUTPUT_NAME))
 print("Done! Winner:", winner)
